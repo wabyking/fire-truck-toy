@@ -209,3 +209,57 @@ export function meow() {
   o.connect(f); f.connect(g); g.connect(sfxBus); env(g, t, 0.04, 0.25, 0.3, 0.2); o.start(t); o.stop(t + 0.7);
 }
 export function setMuted(m) { if (master) master.gain.setTargetAtTime(m ? 0 : 0.9, ctx.currentTime, 0.05); }
+
+// ---- reverse beeper: beep… beep… while backing up
+let rev = null;
+export function reverseBeep(on) {
+  if (!ctx) return;
+  if (on && !rev) {
+    const o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+    o.type = 'square'; o.frequency.value = 1150; lfo.type = 'square'; lfo.frequency.value = 2.2; lg.gain.value = 0.045;
+    const bias = ctx.createConstantSource(); bias.offset.value = 0.045;
+    lfo.connect(lg); lg.connect(g.gain); bias.connect(g.gain); g.gain.value = 0;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 3000;
+    o.connect(f); f.connect(g); g.connect(sfxBus); o.start(); lfo.start(); bias.start(); rev = { o, lfo, bias, g };
+  } else if (!on && rev) { const r = rev; rev = null; [r.o, r.lfo, r.bias].forEach(x => { try { x.stop(); } catch {} }); }
+}
+// ---- refilling: low bubbling gurgle
+let refill = null;
+export function refillOn(on) {
+  if (!ctx) return;
+  if (on && !refill) {
+    const n = ctx.createBufferSource(); n.buffer = nb(); n.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 380; f.Q.value = 3;
+    const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 7; lg.gain.value = 220; lfo.connect(lg); lg.connect(f.frequency);
+    const g = ctx.createGain(); g.gain.value = 0.0001; n.connect(f); f.connect(g); g.connect(sfxBus);
+    g.gain.exponentialRampToValueAtTime(0.5, ctx.currentTime + 0.3); n.start(); lfo.start(); refill = { n, lfo, g };
+  } else if (!on && refill) { const r = refill; refill = null; r.g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.1); setTimeout(() => { try { r.n.stop(); r.lfo.stop(); } catch {} }, 600); }
+}
+export function carHorn() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  for (const [dt, f] of [[0, 520], [0.22, 520]]) {
+    const o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o2.type = 'square'; o.frequency.value = f; o2.frequency.value = f * 1.26;
+    const fl = ctx.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = 1800;
+    o.connect(fl); o2.connect(fl); fl.connect(g); g.connect(sfxBus); env(g, t + dt, 0.01, 0.12, 0.1, 0.05);
+    o.start(t + dt); o2.start(t + dt); o.stop(t + dt + 0.25); o2.stop(t + dt + 0.25);
+  }
+}
+export function bark() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  for (const dt of [0, 0.28]) {
+    const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(380, t + dt); o.frequency.exponentialRampToValueAtTime(240, t + dt + 0.12);
+    f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 2; o.connect(f); f.connect(g); g.connect(sfxBus);
+    env(g, t + dt, 0.01, 0.35, 0.05, 0.08); o.start(t + dt); o.stop(t + dt + 0.2);
+  }
+}
+export function ding() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  for (const [dt, f] of [[0, 1318], [0.1, 1760]]) {
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f; o.connect(g); g.connect(sfxBus);
+    env(g, t + dt, 0.004, 0.3, 0.02, 0.5); o.start(t + dt); o.stop(t + dt + 0.7);
+  }
+}

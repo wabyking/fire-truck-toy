@@ -16,10 +16,10 @@ function softSprite(color = '#ffffff', inner = 1) {
 
 // ---------------------------------------------------------------- water
 export class Water {
-  constructor(scene, n = 900) {
+  constructor(scene, n = 900, { color = '#cfeeff', size = 0.075, emissive = '#4aa3d8', opacity = 0.82 } = {}) {
     this.n = n; this.p = new Float32Array(n * 3); this.v = new Float32Array(n * 3); this.life = new Float32Array(n); this.i = 0;
-    const geo = new THREE.SphereGeometry(0.075, 8, 6);
-    const mat = new THREE.MeshStandardMaterial({ color: '#cfeeff', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.82, emissive: '#4aa3d8', emissiveIntensity: 0.25 });
+    const geo = new THREE.SphereGeometry(size, 8, 6);
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.05, metalness: 0.1, transparent: true, opacity, emissive, emissiveIntensity: 0.25 });
     this.mesh = new THREE.InstancedMesh(geo, mat, n); this.mesh.frustumCulled = false; this.mesh.count = n;
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     scene.add(this.mesh);
@@ -200,8 +200,9 @@ export class Fire {
       embers.add(tmp, new THREE.Vector3((Math.random() - 0.5) * 1.2, 2 + Math.random() * 2, (Math.random() - 0.5) * 1.2), 0.12, 0.04, 1.3);
     }
   }
-  douse(amount, steam) {           // water hit: lose hp, puff steam
+  douse(amount, steam, agent = 'water') {   // water or foam hit: lose hp, puff steam; an oil fire only yields to foam
     if (!this.active) return false;
+    if (this.oil && agent !== 'foam') { this.hp = Math.min(1, this.hp + amount * 0.15); this.wrongAgent = (this.wrongAgent || 0) + 1; return false; }
     this.hp = Math.max(0, this.hp - amount);
     if (Math.random() < 0.4) steam.add(this.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.4, 1 + Math.random(), 0.5)), new THREE.Vector3(0, 2.2, 0), 0.6, 2.6, 1.6);
     if (this.hp <= 0) { this.active = false; return true; }
@@ -248,6 +249,88 @@ export function makeFx(scene) {
   const exhaust = new Puffs(scene, 80, softSprite('rgba(120,120,125,1)'), { opacity: 0.35 });
   const sparkles = new Puffs(scene, 120, softSprite('rgba(255,240,150,1)', 0.3), { additive: true, opacity: 1 });
   const water = new Water(scene);
+  const foam = new Water(scene, 700, { color: '#ffffff', size: 0.13, emissive: '#cfd8e0', opacity: 0.92 });
   const confetti = new Confetti(scene);
-  return { smoke, steam, embers, exhaust, sparkles, water, confetti, puffs: [smoke, steam, embers, exhaust, sparkles] };
+  const jet = new Stream(scene);
+  const foamJet = new Stream(scene, { color: '#ffffff', r0: 0.12, r1: 0.5, opacity: 0.9, emissive: '#c8d2da' });
+  return { smoke, steam, embers, exhaust, sparkles, water, foam, confetti, jet, foamJet, puffs: [smoke, steam, embers, exhaust, sparkles] };
+}
+
+// ---------------------------------------------------------------- the jet: a tube along the ballistic arc with flowing streaks
+export class Stream {
+  constructor(scene, { color = '#d6f1ff', r0 = 0.07, r1 = 0.32, opacity = 0.75, emissive = '#5fb4e6' } = {}) {
+    this.N = 56; this.R = 10; this.r0 = r0; this.r1 = r1;
+    const n = this.N * (this.R + 1);
+    this.pos = new Float32Array(n * 3); this.uv = new Float32Array(n * 2); this.col = new Float32Array(n * 4);
+    const idx = [];
+    for (let i = 0; i < this.N - 1; i++) for (let j = 0; j < this.R; j++) {
+      const a = i * (this.R + 1) + j, b = a + this.R + 1;
+      idx.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('uv', new THREE.BufferAttribute(this.uv, 2));
+    g.setAttribute('color', new THREE.BufferAttribute(this.col, 4).setUsage(THREE.DynamicDrawUsage));
+    g.setIndex(idx); g.computeBoundingSphere();
+    const c = document.createElement('canvas'); c.width = 64; c.height = 256; const x = c.getContext('2d');
+    x.fillStyle = '#ffffff'; x.fillRect(0, 0, 64, 256);
+    for (let k = 0; k < 60; k++) { x.fillStyle = `rgba(150,190,220,${0.15 + Math.random() * 0.3})`; x.fillRect(Math.random() * 64, Math.random() * 256, 2 + Math.random() * 6, 10 + Math.random() * 40); }
+    this.tex = new THREE.CanvasTexture(c); this.tex.wrapS = this.tex.wrapT = THREE.RepeatWrapping; this.tex.repeat.set(2, 3);
+    this.mat = new THREE.MeshStandardMaterial({ color, map: this.tex, transparent: true, opacity, vertexColors: true, roughness: 0.15, metalness: 0.0, emissive, emissiveIntensity: 0.25, depthWrite: false, side: THREE.DoubleSide });
+    this.mesh = new THREE.Mesh(g, this.mat); this.mesh.frustumCulled = false; this.mesh.visible = false; this.mesh.renderOrder = 4;
+    scene.add(this.mesh); this.t = 0; this.end = new THREE.Vector3();
+  }
+  // origin, dir (unit), speed; colliders: [{pos, r, active}] stop the jet; returns the end point
+  update(dt, on, origin, dir, speed, colliders = []) {
+    this.t += dt;
+    if (!on) { this.mesh.visible = false; return null; }
+    this.mesh.visible = true;
+    this.tex.offset.y -= dt * 3.2;
+    const pts = [], step = 0.045;
+    const p = origin.clone(), v = dir.clone().multiplyScalar(speed);
+    let hit = false;
+    for (let i = 0; i < this.N; i++) {
+      pts.push(p.clone());
+      if (p.y < 0.02 || hit) break;
+      v.y -= 9.8 * step; p.addScaledVector(v, step);
+      for (const c of colliders) if (c.active && p.distanceToSquared(c.pos) < c.r * c.r * 0.5) { hit = true; break; }
+    }
+    while (pts.length < this.N) pts.push(pts[pts.length - 1].clone());
+    this.end.copy(pts[pts.length - 1]);
+    const up = new THREE.Vector3(), side = new THREE.Vector3(), tng = new THREE.Vector3();
+    let real = pts.findIndex((q, i) => i > 0 && q.equals(pts[i - 1])); if (real < 0) real = this.N;
+    for (let i = 0; i < this.N; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(this.N - 1, i + 1)];
+      tng.subVectors(b, a); if (tng.lengthSq() < 1e-8) tng.copy(dir); tng.normalize();
+      side.crossVectors(tng, Math.abs(tng.y) > 0.95 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)).normalize();
+      up.crossVectors(side, tng).normalize();
+      const k = Math.min(1, i / Math.max(1, real - 1));
+      const wob = 1 + 0.12 * Math.sin(this.t * 23 + i * 0.9);
+      const rad = (this.r0 + (this.r1 - this.r0) * Math.pow(k, 0.8)) * wob;
+      const alpha = i >= real ? 0 : (1 - Math.pow(k, 3) * 0.75);
+      for (let j = 0; j <= this.R; j++) {
+        const th = j / this.R * Math.PI * 2, o = (i * (this.R + 1) + j);
+        const px = pts[i].x + (side.x * Math.cos(th) + up.x * Math.sin(th)) * rad;
+        const py = pts[i].y + (side.y * Math.cos(th) + up.y * Math.sin(th)) * rad;
+        const pz = pts[i].z + (side.z * Math.cos(th) + up.z * Math.sin(th)) * rad;
+        this.pos[o * 3] = px; this.pos[o * 3 + 1] = py; this.pos[o * 3 + 2] = pz;
+        this.uv[o * 2] = j / this.R; this.uv[o * 2 + 1] = i / this.N * 4;
+        this.col[o * 4] = 1; this.col[o * 4 + 1] = 1; this.col[o * 4 + 2] = 1; this.col[o * 4 + 3] = alpha;
+      }
+    }
+    const g = this.mesh.geometry; g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true; g.attributes.uv.needsUpdate = true;
+    return this.end;
+  }
+}
+
+// a sooty mark on a wall after a fire
+export function scorch(scene, pos, normal, size = 2.2) {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 70, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(20,18,16,0.85)'); gr.addColorStop(0.6, 'rgba(30,26,22,0.45)'); gr.addColorStop(1, 'rgba(30,26,22,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size * 1.4), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
+  m.position.copy(pos).addScaledVector(normal, 0.08); m.position.y += size * 0.35;
+  m.lookAt(m.position.clone().add(normal)); scene.add(m);
+  return m;
 }

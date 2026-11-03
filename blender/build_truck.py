@@ -82,6 +82,9 @@ L_RED = mat('Light_Red', '#ff2a1f', rough=0.15, emit='#ff2a1f', strength=0.0)
 L_BLUE = mat('Light_Blue', '#2a6bff', rough=0.15, emit='#2a6bff', strength=0.0)
 L_AMBER = mat('Light_Amber', '#ffad1f', rough=0.15, emit='#ffad1f', strength=0.0)
 L_HEAD = mat('Light_Head', '#f2f4f7', rough=0.05, emit='#fff6dc', strength=0.0)
+L_TURN_L = mat('Light_TurnL', '#ffad1f', rough=0.15, emit='#ffad1f', strength=0.0)     # turn signals blink per side
+L_TURN_R = mat('Light_TurnR', '#ffad1f', rough=0.15, emit='#ffad1f', strength=0.0)
+L_REV = mat('Light_Reverse', '#f2f4f7', rough=0.1, emit='#ffffff', strength=0.0)
 L_TAIL = mat('Light_Tail', '#b0140c', rough=0.15, emit='#ff2010', strength=0.0)
 L_WORK = mat('Light_Work', '#eef3f7', rough=0.1, emit='#ffffff', strength=0.0)
 L_BAY = mat('Light_Bay', '#ffffff', rough=0.3, emit='#fff3d6', strength=0.0)
@@ -291,7 +294,7 @@ for sx in (-1, 1):
     x = sx * 0.95
     cyl(f'HeadBezel_{sx}', 0.17, 0.08, (x, CAB_Y0 - 0.03, 1.15), CHROME, CAB, rot=(PI / 2, 0, 0), seg=32)
     sph(f'HeadLens_{sx}', 0.14, (x, CAB_Y0 - 0.07, 1.15), L_HEAD, CAB, scale=(1, 0.45, 1), seg=24)
-    box(f'Turn_{sx}', (0.18, 0.05, 0.1), (x, CAB_Y0 - 0.03, 0.92), L_AMBER, CAB, bev=0.02)
+    box(f'Turn_{sx}', (0.18, 0.05, 0.1), (x, CAB_Y0 - 0.03, 0.92), (L_TURN_L if sx > 0 else L_TURN_R), CAB, bev=0.02)
     cyl(f'FogLight_{sx}', 0.07, 0.06, (sx * 0.7, CAB_Y0 - 0.39, 0.74), L_HEAD, CAB, rot=(PI / 2, 0, 0), seg=20)
     box(f'Marker_{sx}', (0.04, 0.1, 0.05), (sx * (W2 + 0.01), CAB_Y0 + 0.2, 2.98), L_AMBER, CAB, bev=0.01)
 # bumper bell (博文 rings it) — brass, on a bracket, with a red pull cord
@@ -601,7 +604,7 @@ box('RearStep', (2.3, 0.45, 0.07), (0, BODY_Y1 + 0.25, 0.75), PLATE, REAR, bev=0
 for sx in (-1, 1):
     box(f'RearStepBracket_{sx}', (0.06, 0.45, 0.2), (sx * 1.0, BODY_Y1 + 0.25, 0.65), DARK, REAR, bev=0.0)
     box(f'TailHousing_{sx}', (0.3, 0.06, 0.55), (sx * 0.98, BODY_Y1 + 0.03, 1.25), DARK, REAR, bev=0.02)
-    for k, (m, z) in enumerate(((L_TAIL, 1.42), (L_AMBER, 1.25), (L_HEAD, 1.08))):
+    for k, (m, z) in enumerate(((L_TAIL, 1.42), ((L_TURN_L if sx > 0 else L_TURN_R), 1.25), (L_REV, 1.08))):
         cyl(f'TailLamp_{sx}_{k}', 0.09, 0.03, (sx * 0.98, BODY_Y1 + 0.07, z), m, REAR, rot=(PI / 2, 0, 0), seg=20, static=False)
     box(f'RearBeacon_{sx}', (0.18, 0.12, 0.14), (sx * 1.0, BODY_Y1 - 0.05, BODY_Z1 + 0.1), (L_RED if sx < 0 else L_BLUE), REAR, bev=0.03, static=False)
     tube(f'RearGrab_{sx}', [(sx * 0.75, BODY_Y1 + 0.02, 1.05), (sx * 0.75, BODY_Y1 + 0.09, 1.1), (sx * 0.75, BODY_Y1 + 0.09, 2.2), (sx * 0.75, BODY_Y1 + 0.02, 2.25)], 0.022, CHROME, REAR)
@@ -688,6 +691,16 @@ cyl('MonitorBarrel', 0.06, 0.5, (0, -0.25, 0.15), BRASS, NZ, rot=(PI / 2, 0, 0),
 cyl('MonitorTip', 0.045, 0.08, (0, -0.52, 0.15), CHROME, NZ, rot=(PI / 2, 0, 0), seg=16, static=False)
 empty('Nozzle_Tip', (0, -0.58, 0.15), NZ)
 cyl('TipLight', 0.05, 0.06, (0.22, -0.2, 0.08), L_WORK, TIP, rot=(PI / 2, 0, 0), seg=12, static=False)
+BK = empty('Ladder_Basket', (0, -0.55, -0.32), TIP)
+box('BasketFloor', (0.95, 0.8, 0.05), (0, 0, 0), PLATE, BK, bev=0.01)
+box('BasketKick', (0.97, 0.82, 0.14), (0, 0, 0.08), RED, BK, bev=0.01)
+for bx in (-0.46, 0.46):
+    for byy in (-0.38, 0.38):
+        cyl(f'BasketPost_{bx}_{byy}', 0.025, 0.62, (bx, byy, 0.33), YELLOW, BK, seg=10)
+tube('BasketRailTop', [(-0.46, -0.38, 0.64), (0.46, -0.38, 0.64), (0.46, 0.38, 0.64), (-0.46, 0.38, 0.64), (-0.46, -0.38, 0.64)], 0.03, YELLOW, BK)
+tube('BasketRailMid', [(-0.46, -0.38, 0.38), (0.46, -0.38, 0.38), (0.46, 0.38, 0.38), (-0.46, 0.38, 0.38), (-0.46, -0.38, 0.38)], 0.02, YELLOW, BK)
+box('BasketStripe', (0.94, 0.02, 0.1), (0, -0.39, 0.5), REFLECT, BK, bev=0.0)
+empty('Basket_Seat', (0, 0.05, 0.05), BK)
 # a water pipe along the base section
 cyl('LadderPipe', 0.04, LAD_L - 0.3, (0, -(LAD_L - 0.3) / 2, -0.06), ALU, BOOM, rot=(PI / 2, 0, 0), seg=12, static=False)
 # the cradle that holds the ladder over the cab

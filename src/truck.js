@@ -33,7 +33,7 @@ export async function loadTruck() {
   const T = { model, N, mats: {}, state: newState(), tappables: [] };
   model.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) T.mats[m.name] = m; });
   // materials the page drives
-  for (const k of ['Light_Red', 'Light_Blue', 'Light_Amber', 'Light_Head', 'Light_Tail', 'Light_Work', 'Light_Bay', 'Gauge_Face']) {
+  for (const k of ['Light_Red', 'Light_Blue', 'Light_Amber', 'Light_Head', 'Light_Tail', 'Light_Work', 'Light_Bay', 'Gauge_Face', 'Light_TurnL', 'Light_TurnR', 'Light_Reverse']) {
     const m = T.mats[k]; if (!m) continue; m.emissiveIntensity = 0; m.toneMapped = true;
   }
   if (T.mats.Glass) { T.mats.Glass.transparent = true; T.mats.Glass.opacity = 0.28; T.mats.Glass.depthWrite = false; T.mats.Glass.envMapIntensity = 1.5; }
@@ -48,7 +48,7 @@ export async function loadTruck() {
   for (const n in N) { const m = n.match(/^Shutter_([LR])_([A-D])$/); if (m) T.shutters[m[1] + m[2]] = N[n]; }
   T.wheels = Object.keys(N).filter(n => /^Wheel_(F|R\d)[LR]$/.test(n)).map(n => N[n]);
   T.steer = [P('Steer_FL'), P('Steer_FR')];
-  T.ladder = { tt: P('Ladder_Turntable'), boom: P('Ladder_Boom'), f1: P('Ladder_Fly1'), f2: P('Ladder_Fly2'), nozzle: P('Ladder_Nozzle'), tip: P('Nozzle_Tip'), basket: P('Ladder_Tip'), lift: P('Ladder_LiftCyl') };
+  T.ladder = { tt: P('Ladder_Turntable'), boom: P('Ladder_Boom'), f1: P('Ladder_Fly1'), f2: P('Ladder_Fly2'), nozzle: P('Ladder_Nozzle'), tip: P('Nozzle_Tip'), basket: P('Ladder_Tip'), cage: P('Ladder_Basket'), seat: P('Basket_Seat'), lift: P('Ladder_LiftCyl') };
   T.ladder.f1z = T.ladder.f1.position.z; T.ladder.f2z = T.ladder.f2.position.z;
   T.outriggers = ['FL', 'FR', 'RL', 'RR'].map(k => ({ beam: P('Outrigger_' + k), jack: P('Outrigger_' + k + '_Jack'), sx: k[1] === 'L' ? 1 : -1 }))
     .filter(o => o.beam).map(o => ({ ...o, x0: o.beam.position.x, y0: o.jack.position.y }));
@@ -86,7 +86,7 @@ function newState() {
     shutters: {}, shutterT: {},
     lights: false, siren: false, headlights: false, work: false,
     yaw: 0, elev: 0.0, ext: 0, yawT: 0, elevT: 0, extT: 0, nozPitch: 0, nozPitchT: 0,
-    outrig: 0, outrigT: 0, spraying: false,
+    outrig: 0, outrigT: 0, spraying: false, tank: 100, agent: 'water', turn: 0, braking: false,
     reelSpin: 0, reelV: 0, bellT: -9, wipe: false, speed: 0, steer: 0, wheelA: 0, t: 0,
   };
 }
@@ -172,8 +172,12 @@ export function animateTruck(T, dt) {
   } else {
     setEmit(T, 'Light_Red', 0); setEmit(T, 'Light_Blue', 0); setEmit(T, 'Light_Amber', 0); T.beacon.intensity = 0;
   }
-  setEmit(T, 'Light_Head', S.headlights ? 5 : 0.0); T.head.intensity = S.headlights ? 60 : 0;
-  setEmit(T, 'Light_Tail', S.headlights ? (S.speed < -0.1 ? 6 : 2.5) : (S.speed < -0.1 ? 4 : 0));
+  setEmit(T, 'Light_Head', S.headlights ? 5 : 0.0); T.head.intensity = S.headlights ? (S.night ? 140 : 60) : 0;
+  setEmit(T, 'Light_Tail', S.braking ? 7 : (S.headlights ? 2.5 : 0));
+  setEmit(T, 'Light_Reverse', S.speed < -0.1 ? 6 : 0);
+  const blink = ((t * 1.6) % 1) < 0.55 ? 1 : 0;                 // turn signals and hazards
+  setEmit(T, 'Light_TurnL', (S.turn > 0 || S.lights) ? 6 * blink : 0);
+  setEmit(T, 'Light_TurnR', (S.turn < 0 || S.lights) ? 6 * blink : 0);
   setEmit(T, 'Light_Work', S.work || S.spraying ? 4 : 0);
   setEmit(T, 'Gauge_Face', 0.25);
   // outriggers: beams slide out, then the jacks press down
@@ -196,6 +200,7 @@ export function animateTruck(T, dt) {
     L.nozzle.quaternion.slerp(qb.setFromEuler(eu.set(S.elev * 0.85 - S.nozPitch, 0, 0)), 1 - Math.exp(-8 * dt));   // level-ish, then pitch
   }
   if (L.lift) L.lift.rotation.x = -S.elev * 0.55;
+  if (L.cage) L.cage.rotation.x = S.elev;                      // the rescue basket stays level
   // valves (a half turn when tapped) and gauges
   for (const v of T.valves) { if (!v.v) continue; v.v.rotation.x = -Math.PI * 0.5 * Math.min(1, Math.max(0, v.t > 0 ? 1 : 0)) * 0.9; }
   T.needles.forEach((n, i) => { if (n) n.rotation.x = -0.6 + (S.spraying ? 1.6 : 0.2) + Math.sin(t * (1.3 + i) + i) * (S.spraying ? 0.12 : 0.03); });
