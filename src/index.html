@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>佳文和博文的消防车</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: none; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #bfe3fb; font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif; }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  /* top bar */
+  #stars { position: fixed; left: 14px; top: 12px; padding: 8px 16px 8px 12px; border-radius: 30px; background: rgba(255,255,255,.88); box-shadow: 0 4px 0 rgba(0,0,0,.12);
+           font-size: 30px; font-weight: 800; color: #e0491d; display: flex; align-items: center; gap: 6px; transition: transform .2s; }
+  #stars.bump { transform: scale(1.25); }
+  #stars small { font-size: 15px; color: #8a6d3b; font-weight: 700; }
+  .topbtn { position: fixed; top: 12px; width: 56px; height: 56px; border-radius: 50%; border: 0; background: rgba(255,255,255,.88); font-size: 28px;
+            box-shadow: 0 4px 0 rgba(0,0,0,.12); cursor: pointer; }
+  #mute { right: 80px; } #full { right: 14px; }
+  #mute.off::after { content: ''; position: absolute; left: 12px; right: 12px; top: 26px; height: 4px; background: #e33; transform: rotate(-35deg); border-radius: 2px; }
+  /* the speech bubble */
+  #toast { position: fixed; left: 50%; top: 14px; transform: translate(-50%, -140%); max-width: min(76vw, 760px); padding: 12px 26px; border-radius: 26px;
+           background: #fff; color: #2b2f3a; font-size: clamp(18px, 2.6vw, 28px); font-weight: 800; text-align: center; box-shadow: 0 6px 0 rgba(0,0,0,.12);
+           transition: transform .35s cubic-bezier(.2,1.4,.4,1); pointer-events: none; border: 4px solid #ffd23a; }
+  #toast.show { transform: translate(-50%, 0); }
+  #label { position: fixed; transform: translate(-50%, -100%) scale(0); padding: 8px 18px; border-radius: 20px; background: #ff5a3c; color: #fff; font-size: 28px; font-weight: 900;
+           box-shadow: 0 5px 0 rgba(0,0,0,.18); pointer-events: none; transition: transform .25s cubic-bezier(.2,1.6,.4,1); white-space: nowrap; }
+  #label.show { transform: translate(-50%, -100%) scale(1); }
+  /* the big buttons */
+  #dock { position: fixed; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(5, auto); gap: 8px; }
+  .big { width: clamp(50px, min(8.6vw, 13.5vh), 92px); height: clamp(50px, min(8.6vw, 13.5vh), 92px); border-radius: 50%; border: 0; cursor: pointer; position: relative;
+         font-size: clamp(24px, min(4vw, 6.2vh), 44px); line-height: 1; padding: 0; color: #fff; box-shadow: 0 6px 0 rgba(0,0,0,.22), inset 0 -6px 0 rgba(0,0,0,.12);
+         transition: transform .1s; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+  .big span { font-size: clamp(10px, min(1.35vw, 2.1vh), 15px); font-weight: 800; margin-top: 3px; text-shadow: 0 1px 0 rgba(0,0,0,.25); }
+  .big.press, .big.on { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.22), inset 0 -3px 0 rgba(0,0,0,.12); }
+  .big.on { outline: 5px solid #fff6a8; }
+  .big.pulse { animation: pulse 0.9s infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 6px 0 rgba(0,0,0,.22), 0 0 0 0 rgba(255,230,80,.9); } 50% { box-shadow: 0 6px 0 rgba(0,0,0,.22), 0 0 0 16px rgba(255,230,80,0); } }
+  .c-red { background: #e8392c; } .c-blue { background: #2f7ae5; } .c-yellow { background: #f5b800; } .c-green { background: #28a957; }
+  .c-orange { background: #ff7a1a; } .c-purple { background: #8b5cf6; } .c-sky { background: #1fb5e6; } .c-pink { background: #ef5da8; } .c-grey { background: #6c7a89; }
+  /* the driving pad */
+  #pad { position: fixed; left: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); width: clamp(140px, min(22vw, 38vh), 250px); height: clamp(140px, min(22vw, 38vh), 250px); }
+  #pad button { position: absolute; width: 36%; height: 36%; border-radius: 22px; border: 0; background: rgba(255,255,255,.9); font-size: clamp(30px, 3.8vw, 44px);
+                box-shadow: 0 6px 0 rgba(0,0,0,.18); cursor: pointer; }
+  #pad button.on { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.18); background: #fff6a8; }
+  #pad [data-pad=up] { left: 32%; top: 0; } #pad [data-pad=down] { left: 32%; bottom: 0; } #pad [data-pad=left] { left: 0; top: 32%; } #pad [data-pad=right] { right: 0; top: 32%; }
+  #pad .hub { position: absolute; left: 32%; top: 32%; width: 36%; height: 36%; border-radius: 50%; background: #e8392c; display: flex; align-items: center; justify-content: center;
+              font-size: clamp(26px, 3.4vw, 40px); box-shadow: inset 0 -5px 0 rgba(0,0,0,.2); }
+  .flystar { position: fixed; font-size: 54px; transform: scale(1.6); transition: left 1s cubic-bezier(.5,0,.3,1), top 1s cubic-bezier(.5,-.5,.3,1), transform 1s; pointer-events: none; z-index: 30; }
+  /* the title screen */
+  #title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; z-index: 50;
+           background: radial-gradient(circle at 50% 40%, rgba(255,255,255,.55), rgba(191,227,251,.25)); transition: opacity .6s; }
+  #title.hide { opacity: 0; pointer-events: none; }
+  #title h1 { margin: 0; font-size: clamp(36px, 7vw, 84px); color: #e0301e; letter-spacing: 4px; text-shadow: 0 5px 0 #fff, 0 10px 0 rgba(0,0,0,.12); font-weight: 900; text-align: center; }
+  #title .sub { font-size: clamp(16px, 2.4vw, 26px); color: #2b4a6a; font-weight: 800; }
+  #start { width: clamp(150px, 20vw, 220px); height: clamp(150px, 20vw, 220px); border-radius: 50%; border: 0; background: #e8392c; color: #fff; font-size: clamp(34px, 5vw, 56px);
+           font-weight: 900; box-shadow: 0 10px 0 #a3170f, 0 0 0 10px rgba(255,255,255,.6); cursor: pointer; animation: bob 1.6s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-10px) scale(1.04); } }
+  #loading { font-size: 20px; color: #2b4a6a; font-weight: 700; }
+  body.loaded #loading { display: none; } body:not(.loaded) #start { opacity: .4; pointer-events: none; }
+  @media (max-width: 760px) { #dock { grid-template-columns: repeat(4, auto); } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="stars">⭐ <b>0</b> <small>小星星</small></div>
+<button class="topbtn" id="mute" title="声音">🔊</button>
+<button class="topbtn" id="full" title="全屏">⛶</button>
+<div id="toast"></div>
+<div id="label"></div>
+<div id="pad">
+  <button data-pad="up">⬆️</button><button data-pad="down">⬇️</button><button data-pad="left">⬅️</button><button data-pad="right">➡️</button>
+  <div class="hub">🚒</div>
+</div>
+<div id="dock">
+  <button class="big c-red" data-act="lights">🚨<span>警灯</span></button>
+  <button class="big c-blue" data-act="siren">📢<span>警笛</span></button>
+  <button class="big c-yellow" data-act="horn">📯<span>喇叭</span></button>
+  <button class="big c-orange" data-act="bell">🔔<span>铃铛</span></button>
+  <button class="big c-purple" data-act="doors">🚪<span>车门</span></button>
+  <button class="big c-green" data-act="tools">🧰<span>工具箱</span></button>
+  <button class="big c-pink" data-act="ladder"><svg viewBox="0 0 40 40" width="1em" height="1em"><g stroke="#fff" stroke-width="3.6" stroke-linecap="round"><path d="M12 37 L20 3 M28 37 L34 9"/><path d="M14 30 L30 30 M15.6 23 L31.4 23 M17.2 16 L32.8 16 M18.8 9 L33.6 9" stroke-width="3"/></g></svg><span>云梯</span></button>
+  <button class="big c-grey" data-act="outriggers">🦵<span>支腿</span></button>
+  <button class="big c-sky" data-act="spray">💦<span>按住喷水</span></button>
+  <button class="big c-red" data-act="fire">🔥<span>去救火</span></button>
+</div>
+<div id="title">
+  <h1>佳文和博文的消防车</h1>
+  <div class="sub">🚒 点一点消防车，开车、喷水、救火、救小猫！</div>
+  <button id="start">出发！</button>
+  <div id="loading">消防车正在开过来……</div>
+</div>
+<script>/*APP*/</script>
+</body>
+</html>

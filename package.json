@@ -1,0 +1,15 @@
+{
+  "name": "fire-truck-toy",
+  "private": true,
+  "type": "module",
+  "description": "佳文和博文的消防车 — an interactive Blender + three.js fire truck for kids",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "dev": "node tools/serve.mjs"
+  },
+  "dependencies": {
+    "esbuild": "^0.24.0",
+    "playwright-core": "^1.48.2",
+    "three": "^0.170.0"
+  }
+}

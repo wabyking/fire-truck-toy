@@ -1,0 +1,16 @@
+import { chromium } from 'file:///C:/Users/wangbenyou/lemo-opuscar/node_modules/playwright-core/index.mjs';
+import path from 'node:path'; import { fileURLToPath, pathToFileURL } from 'node:url';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const browser = await chromium.launch({ args: ['--enable-gpu', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: +(process.env.W || 1600), height: +(process.env.H || 900) } });
+await page.goto(pathToFileURL(path.join(ROOT, 'dist', 'index.html')).href);
+await page.waitForFunction(() => window.TOY, null, { timeout: 60000 });
+await page.click('#start', { force: true }); await page.waitForTimeout(8000);
+const fps = () => page.evaluate(() => new Promise(r => { let k = 0; const t0 = performance.now(); const f = () => (++k < 60 ? requestAnimationFrame(f) : r(+(60000 / (performance.now() - t0)).toFixed(1))); requestAnimationFrame(f); }));
+const s = []; for (let i = 0; i < 4; i++) s.push(await fps()); console.log('idle', s.join(' '));
+await page.evaluate(() => { TOY.ACTIONS.ladder(); }); await page.waitForTimeout(5000);
+await page.evaluate(() => { TOY.game.spray = true; }); await page.waitForTimeout(3000);
+const s2 = []; for (let i = 0; i < 4; i++) s2.push(await fps()); console.log('spraying', s2.join(' '));
+await page.evaluate(() => { TOY.game.spray = false; TOY.startFire(0); }); await page.waitForTimeout(3000);
+const s3 = []; for (let i = 0; i < 3; i++) s3.push(await fps()); console.log('fire', s3.join(' '));
+await browser.close();
